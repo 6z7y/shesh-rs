@@ -1,4 +1,9 @@
-use std::env;
+use std::{env, fs, path::PathBuf};
+
+use crate::{
+    builtins,
+    shell
+};
 
 #[derive(Debug, PartialEq)]
 pub enum CommandSeparator {
@@ -95,7 +100,6 @@ pub fn split_commands(input: &str) -> Vec<(String, CommandSeparator)> {
                     tokens.push((current.trim().to_string(), CommandSeparator::AndAnd));
                     current.clear();
                 } else {
-                    // إضافة دعم لـ &
                     tokens.push((current.trim().to_string(), CommandSeparator::Background));
                     current.clear();
                 }
@@ -142,12 +146,6 @@ pub fn expand_braces(input: &str) -> Vec<String> {
     }
     result
 }
-
-// fn matches_pattern(name: &str, pattern: &str) -> bool {
-//     let pattern = pattern.trim_matches('*');
-//     name.starts_with(pattern) || name.ends_with(pattern)
-// }
-//
 
 pub fn expand_vars(input: &str) -> String {
     let mut result = String::new();
@@ -261,4 +259,121 @@ pub fn parse_pipeline(input: &str) -> Vec<Vec<String>> {
     input.split('|')
         .map(|part| part.split_whitespace().map(|s| s.to_string()).collect())
         .collect()
+}
+
+/// Complete command names based on input prefix
+pub fn complete_command(prefix: &str) -> Vec<String> {
+    let path = env::var("PATH").unwrap_or_default();
+    let mut completions = Vec::new();
+
+    for dir in path.split(':') {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if let Ok(file_name) = entry.file_name().into_string() {
+                    if file_name.starts_with(prefix) {
+                        completions.push(file_name);
+                    }
+                }
+            }
+        }
+    }
+
+    completions
+}
+
+/// Complete path based on input prefix
+pub fn complete_path(prefix: &str) -> Vec<String> {
+    let expanded_prefix = expand_tilde(prefix);
+    let path = PathBuf::from(&expanded_prefix);
+    let parent = if path.is_dir() {
+        path.clone()
+    } else {
+        path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+    };
+
+    let mut completions = Vec::new();
+    let file_stem = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+
+    if let Ok(entries) = fs::read_dir(parent) {
+        for entry in entries.flatten() {
+            if let Ok(file_name) = entry.file_name().into_string() {
+                if file_name.starts_with(file_stem) {
+                    let mut full_path = entry.path();
+                    if full_path.is_dir() {
+                        full_path.push("");
+                    }
+                    if let Some(full_str) = full_path.to_str() {
+                        completions.push(full_str.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    completions
+}
+
+// Main command processing
+pub fn process_command(cmd_str: &str, background: bool) -> bool {
+    // Step 1: Command expansion
+    let expanded = {
+        let step1 = expand_vars(cmd_str);
+        let step2 = expand_tilde(&step1);
+        parse_input(&step2)
+            .iter()
+            .flat_map(|p| expand_braces(p))
+            .flat_map(|p| {
+                if p.contains('*') {
+                    expand_wildcard(&p)
+                } else {
+                    vec![p]
+                }
+            })
+            .collect::<Vec<String>>()
+    };
+
+    let parts: Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
+    let joined_input = expanded.join(" ");
+
+    // Step 2: Handle pipelines
+    if parts.contains(&"|") {
+        let commands = parse_pipeline(&joined_input);
+        return if background {
+            shell::execute_background_pipeline(commands).is_ok()
+        } else {
+            shell::execute_pipeline(commands).is_ok()
+        };
+    }
+
+    // Step 3: Handle redirections
+    let parsed = parse_redirects(&joined_input);
+    if !parsed.redirects.is_empty() {
+        return if background {
+            shell::execute_background_with_redirect(&parsed.cmd, &parsed.redirects).is_ok()
+        } else {
+            shell::execute_with_redirect(&parsed.cmd, &parsed.redirects).is_ok()
+        };
+    }
+
+    let (cmd, args) = match parts.split_first() {
+        Some((c, a)) => (c, a),
+        None => return false,
+    };
+
+    // Step 4: Built-in commands
+    if let Some(result) = builtins::handle_command(cmd, args) {
+        return if let Err(e) = result {
+            eprintln!("{}", e);
+            false
+        } else {
+            true
+        };
+    }
+
+    // Step 5: External commands
+    if background {
+        shell::execute_background(cmd, args).is_ok()
+    } else {
+        shell::execute(cmd, args).is_ok()
+    }
 }

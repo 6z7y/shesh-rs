@@ -16,6 +16,17 @@ pub fn execute(cmd: &str, args: &[&str]) -> Result<()> {
     Command::new(cmd)
         .args(expanded_args)
         .status()
+        .map_err(|e| {
+            // Custom error message for command not found
+            if e.kind() == std::io::ErrorKind::NotFound {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("shesh: command not found: {}", cmd)
+                )
+            } else {
+                e
+            }
+        })
         .map(|_| ())
 }
 

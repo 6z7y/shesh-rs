@@ -38,9 +38,7 @@ fn get_home_dir() -> PathBuf {
         })
 }
 
-use std::path::Path;
-
-fn ensure_config_dirs(config_path: &Path) {
+fn ensure_config_dirs(config_path: &std::path::Path) {
     if let Some(parent) = config_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -100,25 +98,30 @@ pub fn save_history(cmd: &str) {
     }
 }
 
+pub fn load_history() -> Vec<String> {
+    let history_path = get_home_dir().join(".local/share/shesh/history");
+    if let Ok(content) = fs::read_to_string(history_path) {
+        content.lines().map(|s| s.to_string()).collect()
+    } else {
+        Vec::new()
+    }
+}
+
 pub fn run_startup(config: &Config) {
-    use crate::{commands, shell, builtin};
+    use crate::{commands, shell, builtins};
     
     for cmd_line in &config.startup {
-         let parts = commands::parse_input(cmd_line);
-         if let Some((cmd, args_vec)) = parts.split_first() {
-             let args: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
- 
-             // Built-in command
-             if let Some(res) = builtin::handle_builtin(cmd, &args) {
-                 if let Err(e) = res {
-                     eprintln!("Startup builtin failed: {}", e);
-                 }
-             } else {
-                 // External command
-                 if let Err(e) = shell::execute(cmd, &args) {
-                     eprintln!("Startup command failed: {}", e);
-                 }
-             }
-         }
+        let parts = commands::parse_input(cmd_line);
+        if let Some((cmd, args_vec)) = parts.split_first() {
+            let args: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+            
+            if let Some(res) = builtins::handle_command(cmd, &args) {
+                if let Err(e) = res {
+                    eprintln!("Startup builtin failed: {}", e);
+                }
+            } else if let Err(e) = shell::execute(cmd, &args) {
+                eprintln!("Startup command failed: {}", e);
+            }
+        }
     }
 }

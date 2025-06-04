@@ -1,6 +1,7 @@
 [package]
 name = "shesh"
-version = "0.0.1"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
+termion = "^4.0"
