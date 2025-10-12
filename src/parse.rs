@@ -1,10 +1,13 @@
-use std::{env, fs};
+use std::{
+    env,
+    fs
+};
 
 // AST (Abstract Syntax Tree) representation of commands
 #[derive(Debug, Clone)]
 pub enum ParsedCommand {
-    Single(Vec<String>), // Simple command (e.g., "ls -l")
-    BinaryOp(Box<ParsedCommand>, Operator, Box<ParsedCommand>), // Compound command with operator
+    Single(Vec<String>),  // Simple command (e.g., "ls -l")
+    BinaryOp(Box<ParsedCommand>, Operator, Box<ParsedCommand>),  // Compound command with operator
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -22,11 +25,11 @@ pub enum RedirectType {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Operator {
     Redirect(RedirectType), // RedirectOut, AppendOut, RedirectIn
-    And,                    // && (logical AND)
-    Or,                     // || (logical OR)
-    Pipe,                   // | (pipe)
-    Seq,                    // ; (sequential)
-    Background,             // & (background process)
+    And,         // && (logical AND)
+    Or,          // || (logical OR)
+    Pipe,        // | (pipe)
+    Seq,         // ; (sequential)
+    Background,  // & (background process)
 }
 
 static OPERATORS: &[(&str, Operator)] = &[
@@ -52,44 +55,35 @@ pub fn parse_syntax(input: &str) -> ParsedCommand {
     }
 
     // The rest remains the same
-    OPERATORS
-        .iter()
-        .find_map(|(op_str, op_enum)| {
-            find_outside_quotes(input, op_str).map(|index| {
-                let (left, right_with_op) = input.split_at(index);
-                let right = &right_with_op[op_str.len()..];
-                ParsedCommand::BinaryOp(
-                    Box::new(parse_syntax(left)),
-                    *op_enum,
-                    Box::new(parse_syntax(right)),
-                )
-            })
+    OPERATORS.iter().find_map(|(op_str, op_enum)| {
+        find_outside_quotes(input, op_str).map(|index| {
+            let (left, right_with_op) = input.split_at(index);
+            let right = &right_with_op[op_str.len()..];
+            ParsedCommand::BinaryOp(
+                Box::new(parse_syntax(left)),
+                *op_enum,
+                Box::new(parse_syntax(right))
+            )
         })
-        .unwrap_or_else(|| ParsedCommand::Single(tokenize(input)))
+    }).unwrap_or_else(|| ParsedCommand::Single(tokenize(input)))
 }
 
 // Finds operator occurrences outside quoted strings
 fn find_outside_quotes(input: &str, target: &str) -> Option<usize> {
     let mut in_quotes = None;
     let first_char = target.chars().next()?;
-<<<<<<< HEAD
     let chars = input.char_indices();
     
     for (i, c) in chars {
-=======
-    let mut chars = input.char_indices();
-
-    while let Some((i, c)) = chars.next() {
->>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
         match c {
             '"' | '\'' => {
                 if in_quotes.take() != Some(c) {
                     in_quotes = Some(c);
                 }
-            }
+            },
             _ if in_quotes.is_none() && c == first_char && input[i..].starts_with(target) => {
                 return Some(i);
-            }
+            },
             _ => {}
         }
     }
@@ -109,24 +103,24 @@ fn tokenize(input: &str) -> Vec<String> {
         if found_comment {
             continue; // Ignore everything after #
         }
-
+        
         match c {
             '\\' => {
                 if let Some(next_char) = chars.next() {
                     current.push(next_char);
                 }
-            }
+            },
             '"' if !in_single => in_double = !in_double,
             '\'' if !in_double => in_single = !in_single,
             '#' if !in_single && !in_double => {
                 found_comment = true;
-            }
+            },
             ' ' if !in_single && !in_double => {
                 if !current.is_empty() {
                     tokens.push(current.clone());
                     current.clear();
                 }
-            }
+            },
             _ => current.push(c),
         }
     }
@@ -147,7 +141,7 @@ pub fn process_tokens(cmd: ParsedCommand) -> Vec<String> {
                 match part {
                     _ if part.starts_with('$') => {
                         result.push(env::var(&part[1..]).unwrap_or_default());
-                    }
+                    },
                     _ if part.contains('*') => {
                         // Handle directory/* pattern
                         if let Some(slash_pos) = part.rfind('/') {
@@ -155,8 +149,7 @@ pub fn process_tokens(cmd: ParsedCommand) -> Vec<String> {
                             if pattern == "*" {
                                 if let Ok(entries) = fs::read_dir(dir) {
                                     for entry in entries.flatten() {
-                                        let filename =
-                                            entry.file_name().to_string_lossy().into_owned();
+                                        let filename = entry.file_name().to_string_lossy().into_owned();
                                         result.push(format!("{dir}{filename}"));
                                     }
                                     continue;
@@ -182,18 +175,19 @@ pub fn process_tokens(cmd: ParsedCommand) -> Vec<String> {
                         } else {
                             result.push(part);
                         }
-                    }
+                    },
                     _ if part.contains('{') && part.contains('}') => {
                         if let Some((start, end)) = part.find('{').zip(part.find('}')) {
-                            let expanded = part[start + 1..end].split(',').flat_map(|opt| {
-                                let new = format!("{}{}{}", &part[..start], opt, &part[end + 1..]);
-                                process_tokens(ParsedCommand::Single(vec![new]))
-                            });
+                            let expanded = part[start+1..end].split(',')
+                                .flat_map(|opt| {
+                                    let new = format!("{}{}{}", &part[..start], opt, &part[end+1..]);
+                                    process_tokens(ParsedCommand::Single(vec![new]))
+                                });
                             result.extend(expanded);
                             continue;
                         }
                         result.push(part);
-                    }
+                    },
                     _ => result.push(part),
                 }
             }
