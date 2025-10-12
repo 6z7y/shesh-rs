@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use {
     std::{
         collections::{HashMap, HashSet},
@@ -11,6 +12,18 @@ use {
     crate::utils::expand_tilde
 };
 
+=======
+use crate::utils::expand_tilde;
+use reedline::{Completer, Span, Suggestion};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    fs::{self, OpenOptions},
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::PathBuf,
+    process::Command,
+};
+>>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
 
 /// Main completer struct that handles command completions
 pub struct MyCompleter {
@@ -48,7 +61,11 @@ impl MyCompleter {
                 });
         }
 
+<<<<<<< HEAD
         let builtins = ["24!", "alias", "cd", "exit", "help"];
+=======
+        let builtins = ["alias", "cd", "exit", "help"];
+>>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
         for b in builtins {
             commands.insert(b.to_string());
         }

@@ -7,6 +7,7 @@ mod prompt;
 mod shell;
 mod utils;
 
+<<<<<<< HEAD
 use {
     std::{time::{Duration}, thread::sleep},
     libc::{signal, SIGINT, SIGQUIT, SIG_IGN},
@@ -20,6 +21,20 @@ use {
 };
 
 fn main() {
+=======
+use nu_ansi_term::{Color, Style};
+use reedline::{
+    ColumnarMenu, DefaultHinter, EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi, default_emacs_keybindings,
+};
+
+use crate::{completions::create_default_completer, prompt::PromptSystem};
+
+fn main() {
+    // Initialize VIM_MODE
+    builtins::init_vim_mode();
+
+>>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
     // [1] Load configuration and run startup script
     let cfg = config::init_config();
     config::run_startup(&cfg);
@@ -45,6 +60,7 @@ fn main() {
         .with_history(history)
         .with_completer(completer)
         .with_menu(menu)
+<<<<<<< HEAD
         .with_edit_mode(Box::new(Emacs::new(keybindings)))
         .with_validator(Box::new(CustomValidator))
         .with_hinter(Box::new(DefaultHinter::default()
@@ -52,6 +68,19 @@ fn main() {
             .with_min_chars(1),
         )
     );
+=======
+        .with_hinter(Box::new(
+            DefaultHinter::default()
+                .with_style(
+                    Style::new()
+                        .underline()
+                        .italic()
+                        .fg(Color::Rgb(120, 120, 120)),
+                )
+                .with_min_chars(1),
+        ))
+        .with_edit_mode(Box::new(Emacs::new(keybindings)));
+>>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
 
     unsafe {
         signal(SIGINT, SIG_IGN);
@@ -63,6 +92,21 @@ fn main() {
         match line_editor.read_line(&prompt) {
             Ok(Signal::Success(buf)) if !buf.is_empty() => {
                 config::append_to_history(&buf);
+<<<<<<< HEAD
+=======
+
+                if buf.trim() == "24! vim_keys" {
+                    let enabled = builtins::toggle_vim_mode();
+                    println!("Vim keys {}", if enabled { "enabled" } else { "disabled" });
+
+                    editor = editor.with_edit_mode(if enabled {
+                        Box::new(Vi::default())
+                    } else {
+                        Box::new(Emacs::new(default_emacs_keybindings()))
+                    });
+                }
+
+>>>>>>> 950830b84f455dbe5ae6ec262cb26bf882e18b2f
                 if let Err(e) = shell::exec(&buf) {
                     eprintln!("{e}");
                 }
