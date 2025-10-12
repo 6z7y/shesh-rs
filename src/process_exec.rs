@@ -126,38 +126,11 @@ pub fn handle_redirect(
     // Execute the command with appropriate error handling
     let status = cmd.status()?;
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Command failed with status: {}", status),
-        ));
+        return Err(io::Error::other(format!("Command failed with status: {status}")));
     }
 
     Ok(())
 }
-
-// // Helper function to build Command from ParsedCommand
-// fn build_command(cmd: ParsedCommand) -> io::Result<Command> {
-//     if let ParsedCommand::Single(args) = cmd {
-//         let str_args = process_tokens(ParsedCommand::Single(args));
-//         if str_args.is_empty() {
-//             return Err(io::Error::new(
-//                 io::ErrorKind::InvalidInput,
-//                 "Empty command",
-//             ));
-//         }
-//
-//         let mut command = Command::new(&str_args[0]);
-//         if str_args.len() > 1 {
-//             command.args(&str_args[1..]);
-//         }
-//         Ok(command)
-//     } else {
-//         Err(io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "Complex commands not supported for redirects",
-//         ))
-//     }
-// }
 
 /// Unified pipe and command execution
 pub fn run_pipe(commands: Vec<ParsedCommand>) -> io::Result<()> {

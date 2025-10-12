@@ -72,9 +72,9 @@ pub fn parse_syntax(input: &str) -> ParsedCommand {
 fn find_outside_quotes(input: &str, target: &str) -> Option<usize> {
     let mut in_quotes = None;
     let first_char = target.chars().next()?;
-    let mut chars = input.char_indices();
+    let chars = input.char_indices();
     
-    while let Some((i, c)) = chars.next() {
+    for (i, c) in chars {
         match c {
             '"' | '\'' => {
                 if in_quotes.take() != Some(c) {

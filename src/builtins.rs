@@ -1,16 +1,36 @@
-use std::{
-    collections::HashMap,
-    env,
-    ffi::CString,
-    ptr,
-    io,
-    sync::{Arc, Mutex, OnceLock}
-};
-use libc::{dup2, fork, execvp, waitpid};
+use {
+    std::{
+        collections::HashMap,
+        env,
+        ffi::CString,
+        ptr,
+        io,
+        sync::{Arc, Mutex, OnceLock}
+    },
+    libc::{dup2, fork, execvp, waitpid},
 
-use crate::{
-    utils::expand_tilde
+    crate::{
+        utils::expand_tilde
+    }
 };
+
+
+type BuiltinFn = fn(&[String]) -> io::Result<()>;
+
+static BUILTINS: [(&str, BuiltinFn); 6] = [
+    ("24!", |args| handle_24_command(args)),
+    ("alias", |args| handle_alias(&args.join(" "))),
+    ("cd", |args| cd(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>())),
+    ("exit", |_| std::process::exit(0)),
+    ("export", |args| handle_export_cmd(args)),
+    ("help", |_| { println!("{}", help()); Ok(()) }),
+];
+
+pub fn get_builtin(cmd: &str) -> Option<BuiltinFn> {
+    BUILTINS.iter()
+        .find(|(name, _)| *name == cmd)
+        .map(|(_, func)| *func)
+}
 
 // Alias storage
 static ALIASES: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
@@ -20,30 +40,14 @@ pub static ENV_VARS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 static VIM_MODE: OnceLock<Arc<Mutex<bool>>> = OnceLock::new();
 
-pub fn init_vim_mode() {
-    VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
-}
-
-pub fn toggle_vim_mode() -> bool {
-    let mode = VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
-    let mut enabled = mode.lock().unwrap();
-    *enabled = !*enabled;
-    *enabled
-}
-
-// pub fn get_vim_mode() -> bool {
-//     let mode = VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
-//     *mode.lock().unwrap()
-// }
-
-pub fn handle_24_command(args: &[&str]) -> io::Result<()> {
+pub fn handle_24_command(args: &[String]) -> io::Result<()> {
     if args.is_empty() {
         println!("24! commands:");
         println!("  vim_keys - Toggle Vim keybindings");
         return Ok(());
     }
 
-    match args[0] {
+    match args[0].as_str() {
         "vim_keys" => {
             let enabled = toggle_vim_mode();
             println!("Vim keys {}", if enabled { "enabled" } else { "disabled" });
@@ -54,6 +58,13 @@ pub fn handle_24_command(args: &[&str]) -> io::Result<()> {
             "Unknown 24! command"
         ))
     }
+}
+
+pub fn toggle_vim_mode() -> bool {
+    let mode = VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
+    let mut enabled = mode.lock().unwrap();
+    *enabled = !*enabled;
+    *enabled
 }
 
 fn get_aliases() -> &'static Mutex<HashMap<String, String>> {
@@ -87,18 +98,14 @@ pub fn handle_alias(input: &str) -> io::Result<()> {
 }
 
 pub fn expand_aliases(input: &str) -> String {
-    let Some(first_word) = input.split_whitespace().next() else {
-        return input.to_string();
-    };
-
-    let Some(aliases) = ALIASES.get() else {
-        return input.to_string();
-    };
-
-    let aliases = aliases.lock().unwrap();
-    aliases.get(first_word)
-        .map(|expanded| input.replacen(first_word, expanded, 1))
-        .unwrap_or_else(|| input.to_string())
+    if let Some(first_word) = input.split_whitespace().next() {
+        if let Some(aliases) = ALIASES.get() {
+            if let Some(expanded) = aliases.lock().unwrap().get(first_word) {
+                return input.replacen(first_word, expanded, 1);
+            }
+        }
+    }
+    input.to_string()
 }
 
 pub fn cd(args: &[&str]) -> io::Result<()> {
@@ -186,26 +193,15 @@ pub fn execute_external(command: &str, args: &[&str]) -> io::Result<()> {
 /// Handle export command - condensed version
 pub fn handle_export_cmd(args: &[String]) -> io::Result<()> {
     if args.is_empty() {
-        // Create compact HashMap to avoid duplication
+        use std::collections::BTreeMap;
         
-        let mut vars = HashMap::new();
-        
-        // First: System variables
-        env::vars().for_each(|(k, v)| { vars.insert(k, v); });
-        
-        // Second: Custom variables (override system variables if they exist)
+        let mut vars: BTreeMap<String, String> = env::vars().collect();
         if let Some(env_vars) = ENV_VARS.get() {
-            env_vars.lock().unwrap().iter()
-                .for_each(|(k, v)| { vars.insert(k.clone(), v.clone()); });
+            vars.extend(env_vars.lock().unwrap().iter().map(|(k,v)| (k.clone(),v.clone())));
         }
         
-        // Conversion and sorting
-        let mut sorted_vars: Vec<_> = vars.into_iter().collect();
-        sorted_vars.sort_unstable_by_key(|(k, _)| k.clone());
-        
-        // Display
-        if let Some(max) = sorted_vars.iter().map(|(k, _)| k.len()).max() {
-            sorted_vars.iter().for_each(|(k, v)| println!("{k:<max$} {v}"));
+        for (k, v) in vars {
+            println!("{k:<20} {v}");
         }
     } else {
         args.iter().filter_map(|a| a.split_once('='))

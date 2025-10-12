@@ -1,10 +1,16 @@
-use std::{
-    env,
-    fs::{self, create_dir_all, OpenOptions},
-    io::Write,
-    path::{Path, PathBuf},
-    process::exit,
+use {
+    std::{
+        env,
+        fs::{self, create_dir_all, OpenOptions},
+        io::Write,
+        path::{PathBuf}
+    },
+    crate::{
+        shell::exec,
+        utils::die
+    }
 };
+
 
 pub struct Config {
     pub prompt: Option<String>,
@@ -12,35 +18,20 @@ pub struct Config {
 }
 
 impl Default for Config {
-    fn default() -> Self {
+    fn default()-> Self{
         Self {
-            prompt: Some("#shesh> ".to_string()),
+            prompt: None,
             startup: vec![],
         }
     }
 }
 
-pub fn get_home() -> PathBuf {
-    env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| {
-        eprintln!("can't find the home dir");
-        exit(1)
-    })
+fn get_home()-> PathBuf{
+    env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| die("GET_HOME", "can't find the home dir"))
 }
 
-pub fn get_config() -> PathBuf {
-    env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| get_home().join(".config"))
-}
-
-// pub fn get_cache() -> PathBuf {
-//     env::var_os("XDG_CACHE_HOME")
-//         .map(PathBuf::from)
-//         .unwrap_or_else(|| get_home().join(".cache"))
-// }
-
-pub fn config_file_path() -> PathBuf {
-    get_config().join("shesh").join("shesh.24")
+fn config_file_path() -> PathBuf {
+    get_home().join(".config/shesh/shesh.24")
 }
 
 pub fn history_file_path() -> PathBuf {
@@ -48,7 +39,7 @@ pub fn history_file_path() -> PathBuf {
 }
 
 //config file
-pub fn init() -> Config {
+pub fn init_config() -> Config {
     let config_path = config_file_path();
 
     if let Some(parent) = config_path.parent() {
@@ -56,53 +47,37 @@ pub fn init() -> Config {
     }
 
     if !config_path.exists() {
-        fs::write(
-            &config_path,
-            "#prompt = \"shesh> \"\n#startup\necho \"shesh ready!\"",
-        )
-        .expect("Unable to creat config file")
+        fs::write(&config_path, "#prompt = \"shesh> \"\necho \"shesh ready!\"",)
+        .unwrap_or_else(|_| die("CONFIG", "Unable to creat config file"))
     }
-    load_config(&config_path)
+
+    parse_config(&fs::read_to_string(&config_path).unwrap_or_else(|_| die("CONFIG", "Unable to load a config file")))
 }
 
-pub fn load_config(path: &Path) -> Config {
-    parse_config(&fs::read_to_string(path).expect("Unable to load a config file"))
-}
-
-fn parse_config(content: &str) -> Config {
+fn parse_config(content: &str)-> Config{
     let mut config = Config::default();
-    let mut in_startup = false;
 
     for linee in content.lines() {
         let line = linee.trim();
-        if !line.is_empty() {
-            if let Some(stripped) = line.strip_prefix('#') {
-                match stripped.trim() {
-                    c if c.starts_with("prompt") => config.prompt = None,
-                    c if c.eq_ignore_ascii_case("startup") => in_startup = true,
-                    _ => {}
-                }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=') {
+            if key.trim() == "prompt" {
+                config.prompt = Some(value.trim().trim_matches('"').to_string());
                 continue;
             }
-
-            if in_startup {
-                config.startup.push(line.to_string());
-            } else if let Some((key, value)) = line.split_once('=') {
-                if key.trim() == "prompt" {
-                    config.prompt = Some(value.trim().trim_matches('"').to_string());
-                }
-            }
         }
+        config.startup.push(line.to_string());
     }
     config
 }
 
 pub fn run_startup(config: &Config) {
-    for cmd_line in &config.startup {
-        if !cmd_line.trim().is_empty() {
-            if let Err(e) = crate::shell::exec(cmd_line) {
-                eprintln!("[X] Startup failed: {e}");
-            }
+    for cmd in &config.startup {
+        if let Err(e) = exec(cmd) {
+            eprintln!("[X] Startup failed: {e}");
         }
     }
 }
@@ -111,16 +86,19 @@ pub fn run_startup(config: &Config) {
 pub fn append_to_history(command: &str) {
     let path = history_file_path();
 
-    if path.parent().is_some_and(|p| create_dir_all(p).is_err()) {
-        eprintln!("[X] Failed to create history directory");
-        return;
+    if !path.exists() {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        } else {
+            eprintln!("[X] HISTORY_error to make history folder")
+        }
     }
 
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
-        if let Err(e) = writeln!(file, "{command}") {
-            eprintln!("[X] Failed to write to history file: {e}");
-        }
-    } else {
-        eprintln!("[X] Failed to open history file");
-    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+    
+    writeln!(file, "{}", command).unwrap();
 }
