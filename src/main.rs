@@ -20,6 +20,11 @@ use {
 };
 
 fn main() {
+    unsafe {
+        signal(SIGINT, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);
+    }
+
     // [1] Load configuration and run startup script
     let cfg = config::init_config();
     config::run_startup(&cfg);
@@ -53,19 +58,14 @@ fn main() {
         )
     );
 
-    unsafe {
-        signal(SIGINT, SIG_IGN);
-        signal(SIGQUIT, SIG_IGN);
-    }
-
     // [7] Main REPL loop
     loop {
         match line_editor.read_line(&prompt) {
             Ok(Signal::Success(buf)) if !buf.is_empty() => {
                 config::append_to_history(&buf);
                 if let Err(e) = shell::exec(&buf) {
-                    eprintln!("{e}");
-                }
+                    eprintln!("{e}")
+                };
             }
             Ok(Signal::Success(_)) => continue,
             Ok(Signal::CtrlD) => break,

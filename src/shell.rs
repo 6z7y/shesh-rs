@@ -15,14 +15,14 @@ pub fn exec(cmd: &str) -> io::Result<()> {
 pub fn run(cmd: ParsedCommand) -> io::Result<()> {
     match cmd {
         ParsedCommand::Single(args) => {
-            if args.is_empty() {
-                return Ok(());
-            }
+            // if args.is_empty() {
+            //     return Ok(());
+            // }
 
             let str_args = process_tokens(ParsedCommand::Single(args));
             let cmd = str_args[0].as_str();
-            get_builtin(cmd).map_or_else(
-                || execute_external(cmd, &str_args[1..].iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+            get_builtin(cmd).map_or_else(||
+                execute_external(cmd, &str_args[1..].iter().map(|s| s.as_str()).collect::<Vec<_>>()),
                 |handler| handler(&str_args[1..])
             )
         },

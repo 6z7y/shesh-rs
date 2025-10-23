@@ -1,13 +1,13 @@
 use {
     std::{
         env,
-        fs::{self, create_dir_all, OpenOptions},
+        fs::{self, create_dir_all, OpenOptions, read_to_string, write},
         io::Write,
         path::{PathBuf}
     },
     crate::{
         shell::exec,
-        utils::die
+        utils::{die, system_err}
     }
 };
 
@@ -27,19 +27,19 @@ impl Default for Config {
 }
 
 fn get_home()-> PathBuf{
-    env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| die("GET_HOME", "can't find the home dir"))
+    env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| die("can't find the home dir"))
 }
 
-fn config_file_path() -> PathBuf {
+fn config_file_path()-> PathBuf{
     get_home().join(".config/shesh/shesh.24")
 }
 
-pub fn history_file_path() -> PathBuf {
+pub fn history_file_path()-> PathBuf{
     get_home().join(".local/share/shesh/history")
 }
 
 //config file
-pub fn init_config() -> Config {
+pub fn init_config()-> Config{
     let config_path = config_file_path();
 
     if let Some(parent) = config_path.parent() {
@@ -47,11 +47,11 @@ pub fn init_config() -> Config {
     }
 
     if !config_path.exists() {
-        fs::write(&config_path, "#prompt = \"shesh> \"\necho \"shesh ready!\"",)
-        .unwrap_or_else(|_| die("CONFIG", "Unable to creat config file"))
+        write(&config_path, "#prompt = \"shesh> \"\necho \"shesh ready!\"",)
+        .unwrap_or_else(|_| eprintln!("Unable to creat config file"))
     }
 
-    parse_config(&fs::read_to_string(&config_path).unwrap_or_else(|_| die("CONFIG", "Unable to load a config file")))
+    parse_config(&read_to_string(&config_path).unwrap_or_else(|_| die("Unable to load a config file")))
 }
 
 fn parse_config(content: &str)-> Config{
@@ -90,7 +90,7 @@ pub fn append_to_history(command: &str) {
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         } else {
-            eprintln!("[X] HISTORY_error to make history folder")
+            system_err("error for make history folder");
         }
     }
 

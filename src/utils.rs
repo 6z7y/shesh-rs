@@ -6,8 +6,12 @@ use {
     std::{env, path::PathBuf, process::exit}
 };
 
-pub fn die(title: &str, message: &str)-> !{
-    eprintln!("[X] {title}_{message})");
+pub fn system_err(msg: &str){
+    eprintln!("Shesh: {msg}")
+}
+
+pub fn die(msg: &str)-> !{
+    eprintln!("Shesh: {msg})");
     exit(1)
 }
 

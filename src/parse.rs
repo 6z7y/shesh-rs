@@ -1,7 +1,4 @@
-use std::{
-    env,
-    fs
-};
+use std::{env, fs};
 
 // AST (Abstract Syntax Tree) representation of commands
 #[derive(Debug, Clone)]
@@ -48,7 +45,7 @@ static OPERATORS: &[(&str, Operator)] = &[
 ];
 
 // Main parsing function - entry point
-pub fn parse_syntax(input: &str) -> ParsedCommand {
+pub fn parse_syntax(input: &str)-> ParsedCommand{
     // If the input is a single operator from OPERATORS
     if OPERATORS.iter().any(|(op, _)| input == *op) {
         return ParsedCommand::Single(vec![]); // Empty list

@@ -5,7 +5,7 @@ use {
         ffi::CString,
         ptr,
         io,
-        sync::{Arc, Mutex, OnceLock}
+        sync::{Mutex, OnceLock}
     },
     libc::{dup2, fork, execvp, waitpid},
 
@@ -17,8 +17,8 @@ use {
 
 type BuiltinFn = fn(&[String]) -> io::Result<()>;
 
-static BUILTINS: [(&str, BuiltinFn); 6] = [
-    ("24!", |args| handle_24_command(args)),
+static BUILTINS: [(&str, BuiltinFn); 5] = [
+    // ("24!", |args| handle_24_command(args)),
     ("alias", |args| handle_alias(&args.join(" "))),
     ("cd", |args| cd(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>())),
     ("exit", |_| std::process::exit(0)),
@@ -38,42 +38,41 @@ static ALIASES: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 // Environment variables storage
 pub static ENV_VARS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
-static VIM_MODE: OnceLock<Arc<Mutex<bool>>> = OnceLock::new();
+// static VIM_MODE: OnceLock<Arc<Mutex<bool>>> = OnceLock::new();
 
-pub fn handle_24_command(args: &[String]) -> io::Result<()> {
-    if args.is_empty() {
-        println!("24! commands:");
-        println!("  vim_keys - Toggle Vim keybindings");
-        return Ok(());
-    }
+// pub fn handle_24_command(args: &[String]) -> io::Result<()> {
+//     if args.is_empty() {
+//         println!("24! commands:");
+//         println!("  vim_keys - Toggle Vim keybindings");
+//         return Ok(());
+//     }
+//
+//     match args[0].as_str() {
+//         "vim_keys" => {
+//             let enabled = toggle_vim_mode();
+//             println!("Vim keys {}", if enabled { "enabled" } else { "disabled" });
+//             Ok(())
+//         },
+//         _ => Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "Unknown 24! command"
+//         ))
+//     }
+// }
+//
+// pub fn toggle_vim_mode() -> bool {
+//     let mode = VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
+//     let mut enabled = mode.lock().unwrap();
+//     *enabled = !*enabled;
+//     *enabled
+// }
 
-    match args[0].as_str() {
-        "vim_keys" => {
-            let enabled = toggle_vim_mode();
-            println!("Vim keys {}", if enabled { "enabled" } else { "disabled" });
-            Ok(())
-        },
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Unknown 24! command"
-        ))
-    }
-}
-
-pub fn toggle_vim_mode() -> bool {
-    let mode = VIM_MODE.get_or_init(|| Arc::new(Mutex::new(false)));
-    let mut enabled = mode.lock().unwrap();
-    *enabled = !*enabled;
-    *enabled
-}
-
-fn get_aliases() -> &'static Mutex<HashMap<String, String>> {
-    ALIASES.get_or_init(|| Mutex::new(HashMap::new()))
-}
+// fn get_aliases() -> &'static Mutex<HashMap<String, String>> {
+// }
 
 pub fn handle_alias(input: &str) -> io::Result<()> {
-    let aliases = get_aliases();
-    let mut aliases = aliases.lock().unwrap();
+    let list = ALIASES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut aliases = list.lock().unwrap();
 
     if input.is_empty() {
         for (name, cmd) in &*aliases {
@@ -98,11 +97,11 @@ pub fn handle_alias(input: &str) -> io::Result<()> {
 }
 
 pub fn expand_aliases(input: &str) -> String {
-    if let Some(first_word) = input.split_whitespace().next() {
-        if let Some(aliases) = ALIASES.get() {
-            if let Some(expanded) = aliases.lock().unwrap().get(first_word) {
-                return input.replacen(first_word, expanded, 1);
-            }
+    let first_word = input.split_whitespace().next().unwrap_or_default();
+
+    if let Some(aliases) = ALIASES.get() {
+        if let Some(expanded) = aliases.lock().unwrap().get(first_word) {
+            return input.replacen(first_word, expanded, 1);
         }
     }
     input.to_string()
